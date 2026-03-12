@@ -30,6 +30,7 @@ jobs:
             --exclude '.git' \
             --exclude '.github' \
             --exclude 'commands' \
+            --exclude 'citedy-skills' \
             ./ citedy-skills/skills/codex-symphony/
           cp commands/codex-symphony.md citedy-skills/commands/codex-symphony.md
 
