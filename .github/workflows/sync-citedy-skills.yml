@@ -40,14 +40,7 @@ jobs:
           set -euo pipefail
           cd citedy-skills
           if [[ -n "$(git status --porcelain)" ]]; then
-            node - <<'NODE'
-            const fs = require("fs");
-            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-            const parts = pkg.version.split(".").map(Number);
-            parts[2] += 1;
-            pkg.version = parts.join(".");
-            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-            NODE
+            node -e 'const fs=require("fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); const parts=pkg.version.split(".").map(Number); parts[2]+=1; pkg.version=parts.join("."); fs.writeFileSync("package.json", JSON.stringify(pkg,null,2)+"\n");'
           fi
 
       - name: Commit and push if needed
