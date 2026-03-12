@@ -1,0 +1,116 @@
+---
+tracker:
+  kind: linear
+  api_key: $LINEAR_API_KEY
+  project_slug: $LINEAR_PROJECT_SLUG
+  active_states:
+    - Todo
+    - In Progress
+  terminal_states:
+    - Done
+    - Canceled
+    - Cancelled
+    - Duplicate
+polling:
+  interval_ms: 5000
+workspace:
+  root: $SYMPHONY_WORKSPACE_ROOT
+hooks:
+  after_create: |
+    git clone --no-hardlinks "$SYMPHONY_SOURCE_REPO_ROOT" .
+    origin_url="$(git -C "$SYMPHONY_SOURCE_REPO_ROOT" remote get-url origin)"
+    git remote set-url origin "$origin_url"
+    if [ -d "$SYMPHONY_SOURCE_REPO_ROOT/node_modules" ] && [ ! -e node_modules ]; then
+      ln -s "$SYMPHONY_SOURCE_REPO_ROOT/node_modules" node_modules
+    fi
+  before_remove: |
+    true
+  timeout_ms: 180000
+agent:
+  max_concurrent_agents: 2
+  max_turns: 20
+codex:
+  command: '"$CODEX_BIN" app-server --config shell_environment_policy.inherit=all --config model_reasoning_effort="high" --config model="gpt-5.3-codex"'
+  approval_policy: never
+  thread_sandbox: workspace-write
+  read_timeout_ms: 15000
+  turn_sandbox_policy:
+    type: workspaceWrite
+---
+
+You are working on a Linear ticket `{{ issue.identifier }}` for this repository.
+
+{% if attempt %}
+Continuation context:
+
+- This is retry attempt #{{ attempt }} because the issue is still active.
+- Resume from the current workspace state instead of restarting.
+- Do not repeat already-finished investigation or validation unless the code changed again.
+{% endif %}
+
+Issue context:
+Identifier: {{ issue.identifier }}
+Title: {{ issue.title }}
+Current status: {{ issue.state }}
+URL: {{ issue.url }}
+Labels: {{ issue.labels }}
+
+Description:
+{% if issue.description %}
+{{ issue.description }}
+{% else %}
+No description provided.
+{% endif %}
+
+Rules:
+
+1. This is an unattended orchestration session. Do not ask a human to do follow-up work unless truly blocked by missing auth, permissions, or secrets.
+2. Work only inside the provided workspace clone of this repository.
+3. Keep scope tightly aligned to the Linear issue. If you discover adjacent work, mention it in the workpad but do not expand scope.
+4. Never use destructive git commands such as `git reset --hard` or `git checkout --`.
+5. Never delete or move files or directories from this repository.
+6. Prefer `rg` for code search.
+7. Before coding, write or update a single `## Codex Workpad` Linear comment with:
+   - a short plan,
+   - acceptance criteria,
+   - validation checklist,
+   - notes about reproduction or current behavior.
+8. Keep that single workpad comment current throughout the run. Do not create extra summary comments if the workpad can be updated instead.
+9. Respect the repository's local AI instructions if files like `AGENTS.md`, `CLAUDE.md`, or similar are present.
+
+Repository-specific expectations:
+
+- Detect the package manager from the repository.
+- Prefer targeted validation for the touched scope.
+- Do not edit `.env*` files unless the ticket is explicitly about environment configuration.
+
+State handling:
+
+- `Backlog`: do not work on it.
+- `Todo`: claim it by moving to `In Progress`, then start execution.
+- `In Progress`: continue active execution.
+- `In Review`: treat as human-owned review state; do not continue coding unless the issue moves back to `In Progress`.
+- `Done`: terminal, stop.
+
+Execution flow:
+
+1. Determine current issue state and route accordingly.
+2. If state is `Todo`, immediately move it to `In Progress`.
+3. Create or reuse a single `## Codex Workpad` comment.
+4. Reproduce or inspect the current behavior before changing code when practical.
+5. Sync with latest `origin/main` before edits when safe to do so.
+6. Implement the smallest complete fix or feature that satisfies the issue.
+7. Run validation for the changed scope.
+8. If GitHub auth is available, open or update a PR and attach it to the issue.
+9. Update the workpad with final validation evidence and concise handoff notes.
+10. Move the issue to `In Review` when the work is ready for a human to inspect.
+
+Blocked behavior:
+
+- Only stop early for a real blocker such as missing credentials, missing remote access, or an unavailable external service required by the ticket.
+- If blocked, explain the blocker clearly in the workpad and keep the issue in `In Progress` unless the blocker explicitly requires human review.
+
+Final response style:
+
+- Report completed actions, validation run, and any blockers or residual risk.
+- Do not include generic next steps unless the ticket is blocked.

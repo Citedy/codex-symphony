@@ -1,0 +1,65 @@
+name: Sync To Citedy Skills
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout standalone repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Citedy/skills
+        uses: actions/checkout@v4
+        with:
+          repository: Citedy/skills
+          token: ${{ secrets.CITEDY_SKILLS_SYNC_TOKEN }}
+          path: citedy-skills
+
+      - name: Sync codex-symphony into monorepo
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p citedy-skills/skills/codex-symphony citedy-skills/commands
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'commands' \
+            ./ citedy-skills/skills/codex-symphony/
+          cp commands/codex-symphony.md citedy-skills/commands/codex-symphony.md
+
+      - name: Bump monorepo patch version if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd citedy-skills
+          if [[ -n "$(git status --porcelain)" ]]; then
+            node - <<'NODE'
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const parts = pkg.version.split(".").map(Number);
+            parts[2] += 1;
+            pkg.version = parts.join(".");
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+            NODE
+          fi
+
+      - name: Commit and push if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd citedy-skills
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes to sync"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add skills/codex-symphony commands/codex-symphony.md package.json
+          git commit -m "chore: sync codex-symphony from standalone repo"
+          git push origin main

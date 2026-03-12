@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ENV_FILE="$ROOT_DIR/.env.local"
+BASE_ENV_FILE="$ROOT_DIR/.env"
+VENDOR_DIR="$ROOT_DIR/.symphony/openai-symphony"
+SYMPHONY_DIR="$VENDOR_DIR/elixir"
+WORKFLOW_FILE="$ROOT_DIR/WORKFLOW.symphony.md"
+LOGS_ROOT="$ROOT_DIR/.symphony/log"
+PORT="${SYMPHONY_PORT:-}"
+
+read_env() {
+  local key="$1"
+  local value
+  value="$(grep -E "^${key}=" "$ENV_FILE" "$BASE_ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
+  if [[ -z "${value}" ]]; then
+    echo "Missing ${key} in ${ENV_FILE} or ${BASE_ENV_FILE}" >&2
+    exit 1
+  fi
+  printf '%s' "$value"
+}
+
+read_env_optional() {
+  local key="$1"
+  grep -E "^${key}=" "$ENV_FILE" "$BASE_ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true
+}
+
+export LINEAR_API_KEY="$(read_env LINEAR_API_KEY)"
+export LINEAR_PROJECT_SLUG="$(read_env LINEAR_PROJECT_SLUG)"
+export SOURCE_REPO_URL="$(read_env SOURCE_REPO_URL)"
+export SYMPHONY_WORKSPACE_ROOT="$(read_env SYMPHONY_WORKSPACE_ROOT)"
+export SYMPHONY_SOURCE_REPO_ROOT="$ROOT_DIR"
+CODEX_BIN_VALUE="${CODEX_BIN:-$(command -v codex || true)}"
+if [[ -z "${CODEX_BIN_VALUE}" ]]; then
+  echo "Missing codex binary in PATH" >&2
+  exit 1
+fi
+export CODEX_BIN="$CODEX_BIN_VALUE"
+GH_TOKEN_VALUE="$(read_env_optional GH_TOKEN)"
+if [[ -n "${GH_TOKEN_VALUE}" ]]; then
+  export GH_TOKEN="$GH_TOKEN_VALUE"
+fi
+if grep -q '^SYMPHONY_PORT=' "$ENV_FILE" "$BASE_ENV_FILE" 2>/dev/null; then
+  PORT="$(read_env SYMPHONY_PORT)"
+fi
+PORT="${PORT:-4080}"
+
+mkdir -p "$ROOT_DIR/.symphony" "$LOGS_ROOT" "$SYMPHONY_WORKSPACE_ROOT"
+
+if [[ ! -d "$VENDOR_DIR/.git" ]]; then
+  git clone --depth 1 https://github.com/openai/symphony "$VENDOR_DIR"
+else
+  git -C "$VENDOR_DIR" pull --ff-only origin main
+fi
+
+cd "$SYMPHONY_DIR"
+
+mise trust
+mise install
+mise exec -- mix setup
+mise exec -- mix build
+exec mise exec -- ./bin/symphony \
+  --i-understand-that-this-will-be-running-without-the-usual-guardrails \
+  --logs-root "$LOGS_ROOT" \
+  --port "$PORT" \
+  "$WORKFLOW_FILE"

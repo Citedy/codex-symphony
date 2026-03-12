@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Symphony"
+  short_description: "Bootstrap and run local OpenAI Symphony + Linear orchestration in any repo"
+  default_prompt: "Install or start a portable local OpenAI Symphony setup for this repository and give me the dashboard URL."
