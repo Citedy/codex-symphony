@@ -19,6 +19,9 @@ hooks:
   after_create: |
     git clone --no-hardlinks "$SYMPHONY_SOURCE_REPO_ROOT" .
     origin_url="$(git -C "$SYMPHONY_SOURCE_REPO_ROOT" remote get-url origin)"
+    if [ -z "$origin_url" ] || printf '%s' "$origin_url" | grep -q '/.symphony/workspaces/'; then
+      origin_url="$SOURCE_REPO_URL"
+    fi
     git remote set-url origin "$origin_url"
     if [ -d "$SYMPHONY_SOURCE_REPO_ROOT/node_modules" ] && [ ! -e node_modules ]; then
       ln -s "$SYMPHONY_SOURCE_REPO_ROOT/node_modules" node_modules
@@ -74,9 +77,17 @@ Rules:
    - a short plan,
    - acceptance criteria,
    - validation checklist,
-   - notes about reproduction or current behavior.
+   - notes about reproduction or current behavior,
+   - workspace path,
+   - branch name,
+   - current base commit.
 8. Keep that single workpad comment current throughout the run. Do not create extra summary comments if the workpad can be updated instead.
 9. Respect the repository's local AI instructions if files like `AGENTS.md`, `CLAUDE.md`, or similar are present.
+10. Git workflow must be transparent and deterministic:
+   - inspect `git status -sb`, `git remote -v`, and `git branch --show-current` at the start,
+   - ensure `origin` points to the canonical repository URL, not a local workspace path,
+   - create and use a dedicated issue branch before editing code,
+   - only continue on detached HEAD or `main` long enough to create that branch.
 
 Repository-specific expectations:
 
@@ -96,14 +107,27 @@ Execution flow:
 
 1. Determine current issue state and route accordingly.
 2. If state is `Todo`, immediately move it to `In Progress`.
-3. Create or reuse a single `## Codex Workpad` comment.
-4. Reproduce or inspect the current behavior before changing code when practical.
-5. Sync with latest `origin/main` before edits when safe to do so.
-6. Implement the smallest complete fix or feature that satisfies the issue.
-7. Run validation for the changed scope.
-8. If GitHub auth is available, open or update a PR and attach it to the issue.
-9. Update the workpad with final validation evidence and concise handoff notes.
-10. Move the issue to `In Review` when the work is ready for a human to inspect.
+3. Inspect workspace git state immediately:
+   - capture workspace path with `pwd`,
+   - inspect `git status -sb`,
+   - inspect `git remote -v`,
+   - inspect `git rev-parse --short HEAD`.
+4. If `origin` is missing, points to a local workspace path, or otherwise looks incorrect, repair it to `SOURCE_REPO_URL` before coding.
+5. Create or switch to a dedicated branch for the issue, preferably `symphony/{{ issue.identifier }}`.
+6. Create or reuse a single `## Codex Workpad` comment and record:
+   - workspace path,
+   - branch name,
+   - current HEAD commit,
+   - short plan,
+   - acceptance criteria,
+   - validation checklist.
+7. Fetch and sync with latest `origin/main` before edits when repository metadata allows it. If fetch is impossible, state the exact reason in the workpad and continue only if the risk is acceptable.
+8. Reproduce or inspect the current behavior before changing code when practical.
+9. Implement the smallest complete fix or feature that satisfies the issue.
+10. Run validation for the changed scope.
+11. If GitHub auth is available, push the issue branch, open or update a PR, and attach it to the issue.
+12. Update the workpad with final validation evidence, branch/PR status, and concise handoff notes.
+13. Move the issue to `In Review` when the work is ready for a human to inspect.
 
 Blocked behavior:
 
