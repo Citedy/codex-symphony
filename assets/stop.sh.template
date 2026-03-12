@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+PID="$(read_pid_file)"
+if [[ -z "$PID" ]]; then
+  PORT_PID="$(port_pid)"
+  if [[ -n "$PORT_PID" ]]; then
+    echo "No pid file, but port $(resolve_port) is occupied by pid $PORT_PID."
+    echo "Kill it manually if that is your Symphony instance."
+    exit 1
+  fi
+  echo "Symphony is not running."
+  exit 0
+fi
+
+if ! is_pid_running "$PID"; then
+  echo "Stale pid file found for pid $PID."
+  clear_pid_file
+  exit 0
+fi
+
+kill "$PID"
+
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if ! is_pid_running "$PID"; then
+    clear_pid_file
+    echo "Stopped Symphony (pid $PID)"
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "Symphony process $PID did not stop cleanly."
+exit 1

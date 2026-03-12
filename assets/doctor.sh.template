@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+QUIET=0
+if [[ "${1:-}" == "--quiet" ]]; then
+  QUIET=1
+fi
+
+FAILURES=0
+
+check_ok() {
+  if [[ "$QUIET" -eq 0 ]]; then
+    echo "OK   $1"
+  fi
+}
+
+check_fail() {
+  echo "FAIL $1"
+  FAILURES=$((FAILURES + 1))
+}
+
+check_warn() {
+  if [[ "$QUIET" -eq 0 ]]; then
+    echo "WARN $1"
+  fi
+}
+
+for tool in bash git grep cut tail lsof codex mise; do
+  if require_tool "$tool"; then
+    check_ok "tool found: $tool"
+  else
+    check_fail "missing tool: $tool"
+  fi
+done
+
+if [[ -f "$WORKFLOW_FILE" ]]; then
+  check_ok "workflow present: $WORKFLOW_FILE"
+else
+  check_fail "missing workflow: $WORKFLOW_FILE"
+fi
+
+ENV_FILE="$(find_env_file || true)"
+if [[ -n "$ENV_FILE" ]]; then
+  check_ok "env file found: $ENV_FILE"
+else
+  check_fail "no env file found (.env.symphony.local, .env.local, .env)"
+fi
+
+for key in LINEAR_API_KEY LINEAR_PROJECT_SLUG SOURCE_REPO_URL SYMPHONY_WORKSPACE_ROOT; do
+  if value="$(read_env_optional "$key" || true)" && [[ -n "$value" ]]; then
+    check_ok "env present: $key"
+  else
+    check_fail "missing env: $key"
+  fi
+done
+
+if value="$(read_env_optional GH_TOKEN || true)" && [[ -n "$value" ]]; then
+  check_ok "env present: GH_TOKEN"
+else
+  check_warn "optional env missing: GH_TOKEN"
+fi
+
+if [[ -n "$(repo_remote_url)" ]]; then
+  check_ok "git origin configured"
+else
+  check_fail "git origin missing"
+fi
+
+PORT="$(resolve_port)"
+LISTEN_PID="$(port_pid)"
+FILE_PID="$(read_pid_file)"
+
+if [[ -n "$FILE_PID" ]] && is_pid_running "$FILE_PID"; then
+  check_ok "pid file points to running process: $FILE_PID"
+elif [[ -n "$FILE_PID" ]]; then
+  check_warn "pid file exists but process is not running"
+fi
+
+if [[ -n "$LISTEN_PID" ]]; then
+  check_warn "port $PORT already occupied by pid $LISTEN_PID"
+else
+  check_ok "port $PORT is free"
+fi
+
+if [[ "$QUIET" -eq 0 ]]; then
+  echo "Dashboard: $(dashboard_url)"
+  echo "Log path: $OUT_FILE"
+fi
+
+if [[ "$FAILURES" -eq 0 ]]; then
+  if [[ "$QUIET" -eq 0 ]]; then
+    echo "READY codex-symphony checks passed"
+  fi
+  exit 0
+fi
+
+if [[ "$QUIET" -eq 0 ]]; then
+  echo "NOT READY codex-symphony checks failed: $FAILURES"
+fi
+exit 1

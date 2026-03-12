@@ -1,62 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="$ROOT_DIR/.env.local"
-BASE_ENV_FILE="$ROOT_DIR/.env"
-RUN_DIR="$ROOT_DIR/.symphony/run"
-PID_FILE="$RUN_DIR/symphony.pid"
-OUT_FILE="$RUN_DIR/symphony.out.log"
-
-read_env_optional() {
-  local key="$1"
-  grep -E "^${key}=" "$ENV_FILE" "$BASE_ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true
-}
-
-resolve_port() {
-  local port
-  port="$(read_env_optional SYMPHONY_PORT)"
-  if [[ -z "$port" ]]; then
-    port="4080"
-  fi
-  printf '%s' "$port"
-}
-
-is_pid_running() {
-  local pid="$1"
-  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
-}
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 PORT="$(resolve_port)"
 mkdir -p "$RUN_DIR"
 
-if [[ -f "$PID_FILE" ]]; then
-  EXISTING_PID="$(tr -d '[:space:]' < "$PID_FILE" || true)"
-  if is_pid_running "$EXISTING_PID"; then
-    echo "Symphony already running (pid $EXISTING_PID)"
-    echo "Dashboard: http://127.0.0.1:$PORT/"
-    echo "Logs: $OUT_FILE"
-    exit 0
-  fi
+EXISTING_PID="$(read_pid_file)"
+if is_pid_running "$EXISTING_PID"; then
+  echo "Symphony already running (pid $EXISTING_PID)"
+  print_runtime_summary
+  exit 0
 fi
 
-if lsof -ti "tcp:$PORT" >/dev/null 2>&1; then
+LISTEN_PID="$(port_pid)"
+if [[ -n "$LISTEN_PID" ]]; then
   echo "Port $PORT is already in use. Assuming Symphony is already running."
-  echo "Dashboard: http://127.0.0.1:$PORT/"
+  echo "Dashboard: $(dashboard_url)"
   echo "Status: $ROOT_DIR/scripts/symphony/status.sh"
   exit 0
 fi
 
 nohup "$ROOT_DIR/scripts/symphony/start-local.sh" >"$OUT_FILE" 2>&1 < /dev/null &
 PID="$!"
-printf '%s\n' "$PID" > "$PID_FILE"
+write_pid_file "$PID"
 
 sleep 3
 
 if is_pid_running "$PID"; then
   echo "Symphony started in background (pid $PID)"
-  echo "Dashboard: http://127.0.0.1:$PORT/"
-  echo "Logs: $OUT_FILE"
+  print_runtime_summary
   exit 0
 fi
 

@@ -1,51 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="$ROOT_DIR/.env.local"
-BASE_ENV_FILE="$ROOT_DIR/.env"
-RUN_DIR="$ROOT_DIR/.symphony/run"
-PID_FILE="$RUN_DIR/symphony.pid"
-OUT_FILE="$RUN_DIR/symphony.out.log"
-
-read_env_optional() {
-  local key="$1"
-  grep -E "^${key}=" "$ENV_FILE" "$BASE_ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true
-}
-
-resolve_port() {
-  local port
-  port="$(read_env_optional SYMPHONY_PORT)"
-  if [[ -z "$port" ]]; then
-    port="4080"
-  fi
-  printf '%s' "$port"
-}
-
-is_pid_running() {
-  local pid="$1"
-  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
-}
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 PORT="$(resolve_port)"
+ENV_FILE="$(find_env_file || true)"
+PID="$(read_pid_file)"
 
-if [[ -f "$PID_FILE" ]]; then
-  PID="$(tr -d '[:space:]' < "$PID_FILE" || true)"
-  if is_pid_running "$PID"; then
-    echo "Symphony is running (pid $PID)"
-    echo "Dashboard: http://127.0.0.1:$PORT/"
-    echo "Logs: $OUT_FILE"
-    exit 0
+if is_pid_running "$PID"; then
+  echo "Symphony is running (pid $PID)"
+  print_runtime_summary
+  if [[ -n "$ENV_FILE" ]]; then
+    echo "Env file: $ENV_FILE"
   fi
+  exit 0
 fi
 
-if lsof -ti "tcp:$PORT" >/dev/null 2>&1; then
+if [[ -n "$PID" ]]; then
+  echo "Stale pid file: $PID_FILE -> $PID"
+fi
+
+LISTEN_PID="$(port_pid)"
+if [[ -n "$LISTEN_PID" ]]; then
   echo "Something is listening on port $PORT."
-  echo "Dashboard: http://127.0.0.1:$PORT/"
+  echo "Dashboard: $(dashboard_url)"
   echo "PID file: $PID_FILE"
   exit 0
 fi
 
 echo "Symphony is not running."
+if [[ -n "$ENV_FILE" ]]; then
+  echo "Env file: $ENV_FILE"
+fi
 echo "Start: $ROOT_DIR/scripts/symphony/start-background.sh"
 exit 1

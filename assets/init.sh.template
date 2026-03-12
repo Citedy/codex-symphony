@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+TARGET_ENV_FILE="$ROOT_DIR/.env.symphony.local"
+OVERWRITE=0
+
+if [[ "${1:-}" == "--overwrite" ]]; then
+  OVERWRITE=1
+fi
+
+prompt_value() {
+  local key="$1"
+  local prompt="$2"
+  local default_value="${3:-}"
+  local secret="${4:-0}"
+  local value=""
+
+  if [[ -t 0 ]]; then
+    if [[ "$secret" -eq 1 ]]; then
+      if [[ -n "$default_value" ]]; then
+        printf '%s [%s]: ' "$prompt" "$default_value" >&2
+      else
+        printf '%s: ' "$prompt" >&2
+      fi
+      stty -echo
+      IFS= read -r value
+      stty echo
+      printf '\n' >&2
+    else
+      if [[ -n "$default_value" ]]; then
+        printf '%s [%s]: ' "$prompt" "$default_value" >&2
+      else
+        printf '%s: ' "$prompt" >&2
+      fi
+      IFS= read -r value
+    fi
+  else
+    IFS= read -r value || true
+  fi
+
+  if [[ -z "$value" ]]; then
+    value="$default_value"
+  fi
+
+  printf '%s' "$value"
+}
+
+if [[ -f "$TARGET_ENV_FILE" && "$OVERWRITE" -ne 1 ]]; then
+  echo "$TARGET_ENV_FILE already exists. Re-run with --overwrite to replace it." >&2
+  exit 1
+fi
+
+DEFAULT_LINEAR_API_KEY="$(read_env_optional LINEAR_API_KEY || true)"
+DEFAULT_LINEAR_PROJECT_SLUG="$(read_env_optional LINEAR_PROJECT_SLUG || true)"
+DEFAULT_SOURCE_REPO_URL="$(read_env_optional SOURCE_REPO_URL || true)"
+if [[ -z "$DEFAULT_SOURCE_REPO_URL" ]]; then
+  DEFAULT_SOURCE_REPO_URL="$(repo_remote_url)"
+fi
+DEFAULT_WORKSPACE_ROOT="$(read_env_optional SYMPHONY_WORKSPACE_ROOT || true)"
+if [[ -z "$DEFAULT_WORKSPACE_ROOT" ]]; then
+  DEFAULT_WORKSPACE_ROOT='$HOME/.symphony/workspaces'
+fi
+DEFAULT_PORT="$(resolve_port)"
+DEFAULT_GH_TOKEN="$(read_env_optional GH_TOKEN || true)"
+
+LINEAR_API_KEY="$(prompt_value LINEAR_API_KEY 'Linear API key' "$DEFAULT_LINEAR_API_KEY" 1)"
+LINEAR_PROJECT_SLUG="$(prompt_value LINEAR_PROJECT_SLUG 'Linear project slug' "$DEFAULT_LINEAR_PROJECT_SLUG")"
+SOURCE_REPO_URL="$(prompt_value SOURCE_REPO_URL 'Git remote URL for the repo' "$DEFAULT_SOURCE_REPO_URL")"
+SYMPHONY_WORKSPACE_ROOT="$(prompt_value SYMPHONY_WORKSPACE_ROOT 'Workspace root path' "$DEFAULT_WORKSPACE_ROOT")"
+SYMPHONY_PORT="$(prompt_value SYMPHONY_PORT 'Local dashboard port' "$DEFAULT_PORT")"
+GH_TOKEN="$(prompt_value GH_TOKEN 'GitHub token for PR automation (optional)' "$DEFAULT_GH_TOKEN" 1)"
+
+mkdir -p "$ROOT_DIR"
+cat > "$TARGET_ENV_FILE" <<EOF
+LINEAR_API_KEY=$LINEAR_API_KEY
+LINEAR_PROJECT_SLUG=$LINEAR_PROJECT_SLUG
+SOURCE_REPO_URL=$SOURCE_REPO_URL
+SYMPHONY_WORKSPACE_ROOT=$SYMPHONY_WORKSPACE_ROOT
+SYMPHONY_PORT=$SYMPHONY_PORT
+GH_TOKEN=$GH_TOKEN
+EOF
+
+echo "Wrote $TARGET_ENV_FILE"
+echo "Next: ./scripts/symphony/doctor.sh"

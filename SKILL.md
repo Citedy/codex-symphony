@@ -6,7 +6,7 @@ description: >
   any Git repository. Use when the user wants a one-command local Symphony
   runner, a reusable WORKFLOW template, background launch scripts, or a Codex
   wrapper that restarts Symphony automatically when reopening the CLI.
-version: "1.0.0"
+version: "1.1.0"
 author: Citedy
 tags:
   - symphony
@@ -30,6 +30,8 @@ Use this skill when the user asks to:
 - add a reusable `codex-symphony` command
 - bootstrap Linear-driven agent orchestration
 - create a portable Symphony package for another machine or repo
+- diagnose why Symphony is not starting
+- initialize repo-local Symphony env files safely
 
 ## Core Rule
 
@@ -54,6 +56,8 @@ The installer will:
 - copy `WORKFLOW.symphony.md`
 - copy `scripts/symphony/*`
 - copy `.env.symphony.example`
+- enable `./scripts/symphony/init.sh` for `.env.symphony.local`
+- enable `./scripts/symphony/doctor.sh` for readiness checks
 - append `.symphony/` to `.gitignore` if missing
 - install `~/.local/bin/codex-symphony`
 - link this skill into `~/.codex/skills/codex-symphony`
@@ -63,9 +67,14 @@ The installer will:
 After install, the normal commands are:
 
 ```bash
+./scripts/symphony/init.sh
+./scripts/symphony/doctor.sh
 codex-symphony
+./scripts/symphony/logs.sh
+./scripts/symphony/restart.sh
 ./scripts/symphony/start-background.sh
 ./scripts/symphony/status.sh
+./scripts/symphony/stop.sh
 ```
 
 ## Required Env
@@ -87,6 +96,8 @@ Optional:
 When helping the user:
 
 1. run the installer if the repo is not bootstrapped yet
-2. tell the user which env vars are still missing
-3. start Symphony only after the repo is configured
-4. report dashboard URL and log path only
+2. prefer `./scripts/symphony/init.sh` over manual env editing
+3. run `./scripts/symphony/doctor.sh` before starting if setup looks incomplete
+4. tell the user which env vars or tools are still missing
+5. start Symphony only after the repo is configured
+6. report dashboard URL and log path only

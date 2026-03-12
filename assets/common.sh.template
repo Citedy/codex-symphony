@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RUN_DIR="$ROOT_DIR/.symphony/run"
+PID_FILE="$RUN_DIR/symphony.pid"
+OUT_FILE="$RUN_DIR/symphony.out.log"
+LOGS_ROOT="$ROOT_DIR/.symphony/log"
+VENDOR_DIR="$ROOT_DIR/.symphony/openai-symphony"
+SYMPHONY_DIR="$VENDOR_DIR/elixir"
+WORKFLOW_FILE="$ROOT_DIR/WORKFLOW.symphony.md"
+
+env_candidates() {
+  printf '%s\n' \
+    "$ROOT_DIR/.env.symphony.local" \
+    "$ROOT_DIR/.env.local" \
+    "$ROOT_DIR/.env"
+}
+
+find_env_file() {
+  local file
+  while IFS= read -r file; do
+    if [[ -f "$file" ]]; then
+      printf '%s' "$file"
+      return 0
+    fi
+  done < <(env_candidates)
+  return 1
+}
+
+read_env_optional() {
+  local key="$1"
+  local file
+  local value=""
+
+  if [[ -n "${!key:-}" ]]; then
+    printf '%s' "${!key}"
+    return 0
+  fi
+
+  while IFS= read -r file; do
+    if [[ -f "$file" ]]; then
+      value="$(grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
+      if [[ -n "$value" ]]; then
+        printf '%s' "$value"
+        return 0
+      fi
+    fi
+  done < <(env_candidates)
+
+  return 1
+}
+
+read_env_required() {
+  local key="$1"
+  local value
+  value="$(read_env_optional "$key" || true)"
+  if [[ -z "$value" ]]; then
+    local env_file
+    env_file="$(find_env_file || true)"
+    if [[ -n "$env_file" ]]; then
+      echo "Missing ${key} in environment or ${env_file}" >&2
+    else
+      echo "Missing ${key} in environment or any of: .env.symphony.local, .env.local, .env" >&2
+    fi
+    return 1
+  fi
+  printf '%s' "$value"
+}
+
+resolve_port() {
+  local port
+  port="$(read_env_optional SYMPHONY_PORT || true)"
+  if [[ -z "$port" ]]; then
+    port="4080"
+  fi
+  printf '%s' "$port"
+}
+
+dashboard_url() {
+  printf 'http://127.0.0.1:%s/' "$(resolve_port)"
+}
+
+is_pid_running() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+read_pid_file() {
+  if [[ -f "$PID_FILE" ]]; then
+    tr -d '[:space:]' < "$PID_FILE" || true
+  fi
+}
+
+write_pid_file() {
+  local pid="$1"
+  mkdir -p "$RUN_DIR"
+  printf '%s\n' "$pid" > "$PID_FILE"
+}
+
+clear_pid_file() {
+  mkdir -p "$RUN_DIR"
+  : > "$PID_FILE"
+}
+
+port_pid() {
+  lsof -ti "tcp:$(resolve_port)" 2>/dev/null | head -n 1 || true
+}
+
+repo_remote_url() {
+  git -C "$ROOT_DIR" remote get-url origin 2>/dev/null || true
+}
+
+print_runtime_summary() {
+  echo "Dashboard: $(dashboard_url)"
+  echo "Logs: $OUT_FILE"
+}
+
+require_tool() {
+  local tool="$1"
+  command -v "$tool" >/dev/null 2>&1
+}

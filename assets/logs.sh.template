@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+LINES="${1:-100}"
+
+if [[ ! -f "$OUT_FILE" ]]; then
+  echo "No log file yet: $OUT_FILE"
+  exit 0
+fi
+
+tail -n "$LINES" -f "$OUT_FILE"

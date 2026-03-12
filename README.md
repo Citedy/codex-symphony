@@ -14,9 +14,15 @@ This package installs a local Symphony + Linear orchestration setup into the cur
 Inside the target repository:
 
 - `WORKFLOW.symphony.md`
+- `scripts/symphony/common.sh`
+- `scripts/symphony/doctor.sh`
+- `scripts/symphony/init.sh`
+- `scripts/symphony/logs.sh`
+- `scripts/symphony/restart.sh`
 - `scripts/symphony/start-local.sh`
 - `scripts/symphony/start-background.sh`
 - `scripts/symphony/status.sh`
+- `scripts/symphony/stop.sh`
 - `.env.symphony.example`
 
 Inside the user environment:
@@ -60,9 +66,21 @@ Or explicitly target a repo path:
 bash /path/to/codex-symphony/scripts/install.sh /absolute/path/to/your/repo
 ```
 
+## First Run
+
+Inside your target repo:
+
+```bash
+./scripts/symphony/init.sh
+./scripts/symphony/doctor.sh
+codex-symphony
+```
+
+`init.sh` writes `.env.symphony.local`, so you do not need to edit your main repo env file unless you want to.
+
 ## Required Environment Variables
 
-Copy `.env.symphony.example` into your repo env setup and set:
+`init.sh` will ask for these and write them into `.env.symphony.local`:
 
 ```bash
 LINEAR_API_KEY=
@@ -104,6 +122,16 @@ http://127.0.0.1:4080/
 
 ```bash
 ./scripts/symphony/status.sh
+```
+
+## Operational Commands
+
+```bash
+./scripts/symphony/doctor.sh
+./scripts/symphony/init.sh --overwrite
+./scripts/symphony/logs.sh
+./scripts/symphony/restart.sh
+./scripts/symphony/stop.sh
 ```
 
 ## Notes
