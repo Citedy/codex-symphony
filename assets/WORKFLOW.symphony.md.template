@@ -23,6 +23,15 @@ hooks:
       origin_url="$SOURCE_REPO_URL"
     fi
     git remote set-url origin "$origin_url"
+    issue_id="$(basename "$PWD")"
+    branch_name="$(printf '%s' "$issue_id" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._/-' '-')"
+    branch_name="symphony/${branch_name}"
+    git fetch origin main || true
+    if git show-ref --verify --quiet refs/remotes/origin/main; then
+      git checkout -B "$branch_name" origin/main
+    else
+      git checkout -B "$branch_name"
+    fi
     if [ -d "$SYMPHONY_SOURCE_REPO_ROOT/node_modules" ] && [ ! -e node_modules ]; then
       ln -s "$SYMPHONY_SOURCE_REPO_ROOT/node_modules" node_modules
     fi
