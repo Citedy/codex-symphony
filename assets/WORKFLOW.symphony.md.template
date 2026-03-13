@@ -44,10 +44,10 @@ agent:
 codex:
   command: '"$CODEX_BIN" app-server --config shell_environment_policy.inherit=all --config model_reasoning_effort="high" --config model="gpt-5.3-codex"'
   approval_policy: never
-  thread_sandbox: workspace-write
+  thread_sandbox: danger-full-access
   read_timeout_ms: 15000
   turn_sandbox_policy:
-    type: workspaceWrite
+    type: dangerFullAccess
 ---
 
 You are working on a Linear ticket `{{ issue.identifier }}` for this repository.
