@@ -4,6 +4,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUN_DIR="$ROOT_DIR/.symphony/run"
 PID_FILE="$RUN_DIR/symphony.pid"
 OUT_FILE="$RUN_DIR/symphony.out.log"
+START_FILE="$RUN_DIR/symphony.starting"
 LOGS_ROOT="$ROOT_DIR/.symphony/log"
 VENDOR_DIR="$ROOT_DIR/.symphony/openai-symphony"
 SYMPHONY_DIR="$VENDOR_DIR/elixir"
@@ -102,8 +103,31 @@ clear_pid_file() {
   : > "$PID_FILE"
 }
 
+mark_starting() {
+  mkdir -p "$RUN_DIR"
+  date +%s > "$START_FILE"
+}
+
+clear_starting() {
+  mkdir -p "$RUN_DIR"
+  : > "$START_FILE"
+}
+
 port_pid() {
   lsof -ti "tcp:$(resolve_port)" 2>/dev/null | head -n 1 || true
+}
+
+symphony_process_pid() {
+  pgrep -f "/bin/symphony .*${ROOT_DIR}" 2>/dev/null | head -n 1 || true
+}
+
+starting_recently() {
+  [[ -f "$START_FILE" ]] || return 1
+  local started_at now
+  started_at="$(tr -d '[:space:]' < "$START_FILE" 2>/dev/null || true)"
+  [[ "$started_at" =~ ^[0-9]+$ ]] || return 1
+  now="$(date +%s)"
+  (( now - started_at < 300 ))
 }
 
 repo_remote_url() {

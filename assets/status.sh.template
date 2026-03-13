@@ -16,6 +16,16 @@ if is_pid_running "$PID"; then
   exit 0
 fi
 
+PROCESS_PID="$(symphony_process_pid)"
+if [[ -n "$PROCESS_PID" ]]; then
+  echo "Symphony is starting or running (pid $PROCESS_PID)"
+  print_runtime_summary
+  if [[ -n "$ENV_FILE" ]]; then
+    echo "Env file: $ENV_FILE"
+  fi
+  exit 0
+fi
+
 if [[ -n "$PID" ]]; then
   echo "Stale pid file: $PID_FILE -> $PID"
 fi
@@ -25,6 +35,16 @@ if [[ -n "$LISTEN_PID" ]]; then
   echo "Something is listening on port $PORT."
   echo "Dashboard: $(dashboard_url)"
   echo "PID file: $PID_FILE"
+  exit 0
+fi
+
+if starting_recently; then
+  echo "Symphony launch is in progress."
+  echo "Dashboard warming up: $(dashboard_url)"
+  echo "Logs: $OUT_FILE"
+  if [[ -n "$ENV_FILE" ]]; then
+    echo "Env file: $ENV_FILE"
+  fi
   exit 0
 fi
 

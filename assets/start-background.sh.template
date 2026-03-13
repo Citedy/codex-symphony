@@ -13,6 +13,15 @@ if is_pid_running "$EXISTING_PID"; then
   exit 0
 fi
 
+PROCESS_PID="$(symphony_process_pid)"
+if [[ -n "$PROCESS_PID" ]]; then
+  write_pid_file "$PROCESS_PID"
+  clear_starting
+  echo "Symphony already running (pid $PROCESS_PID)"
+  print_runtime_summary
+  exit 0
+fi
+
 LISTEN_PID="$(port_pid)"
 if [[ -n "$LISTEN_PID" ]]; then
   echo "Port $PORT is already in use. Assuming Symphony is already running."
@@ -24,14 +33,39 @@ fi
 nohup "$ROOT_DIR/scripts/symphony/start-local.sh" >"$OUT_FILE" 2>&1 < /dev/null &
 PID="$!"
 write_pid_file "$PID"
+mark_starting
 
-sleep 3
+for _ in {1..6}; do
+  sleep 2
 
-if is_pid_running "$PID"; then
-  echo "Symphony started in background (pid $PID)"
-  print_runtime_summary
-  exit 0
-fi
+  LISTEN_PID="$(port_pid)"
+  if [[ -n "$LISTEN_PID" ]]; then
+    PROCESS_PID="$(symphony_process_pid)"
+    if [[ -n "$PROCESS_PID" ]]; then
+      write_pid_file "$PROCESS_PID"
+    fi
+    clear_starting
+    echo "Symphony started in background (pid ${PROCESS_PID:-$PID})"
+    print_runtime_summary
+    exit 0
+  fi
+
+  PROCESS_PID="$(symphony_process_pid)"
+  if [[ -n "$PROCESS_PID" ]]; then
+    write_pid_file "$PROCESS_PID"
+    echo "Symphony launch initiated (pid $PROCESS_PID)"
+    echo "Dashboard warming up: $(dashboard_url)"
+    echo "Logs: $OUT_FILE"
+    exit 0
+  fi
+
+  if is_pid_running "$PID"; then
+    echo "Symphony launch initiated (bootstrap pid $PID)"
+    echo "Dashboard warming up: $(dashboard_url)"
+    echo "Logs: $OUT_FILE"
+    exit 0
+  fi
+done
 
 echo "Symphony failed to start. Tail of log:"
 tail -n 60 "$OUT_FILE" 2>/dev/null || true
